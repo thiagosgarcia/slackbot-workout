@@ -58,5 +58,39 @@
       "maxReps": 30,
       "units": "rep"
     }
+  ],
+  "motivation": [
+    {
+      "id": 0,
+      "text": "Your turn"
+    },
+    {
+      "id": 1,
+      "text": "C'mon"
+    },
+    {
+      "id": 2,
+      "text": "Right here, right now"
+    },
+    {
+      "id": 3,
+      "text": "Yes, you can"
+    },
+    {
+      "id": 4,
+      "text": "I'm sure you wasn't expecting this"
+    },
+    {
+      "id": 5,
+      "text": "The sooner you go, the sooner you finish"
+    },
+    {
+      "id": 6,
+      "text": "Better now than ever"
+    },
+    {
+      "id": 7,
+      "text": "IIIIIIIIIIIt's time!"
+    }
   ]
 }

@@ -38,7 +38,7 @@ class Bot:
         if os.path.isfile('user_cache.save'):
             with open('user_cache.save','rb') as f:
                 self.user_cache = pickle.load(f)
-                print "Loading " + str(len(self.user_cache)) + " users from cache."
+                print ('Loading ' + str(len(self.user_cache)) + ' users from cache.')
                 return self.user_cache
 
         return {}
@@ -65,10 +65,12 @@ class Bot:
             self.office_hours_on = settings["officeHours"]["on"]
             self.office_hours_begin = settings["officeHours"]["begin"]
             self.office_hours_end = settings["officeHours"]["end"]
+            self.motivation_messages = settings["motivation"]
 
             self.debug = settings["debug"]
 
-        self.post_URL = "https://" + self.team_domain + ".slack.com/services/hooks/slackbot?token=" + URL_TOKEN_STRING + "&channel=" + HASH + self.channel_name
+        self.post_URL = "https://hooks.slack.com/services/T07NS9DKM/B0KSK6D1Q/" + URL_TOKEN_STRING
+        #self.post_URL = "https://" + self.team_domain + ".slack.com/services/hooks/slackbot?token=" + URL_TOKEN_STRING + "&channel=" + HASH + self.channel_name
 
 
 ################################################################################
@@ -112,7 +114,7 @@ def selectUser(bot, exercise):
             return user
 
     # If we weren't able to select one, just pick a random
-    print "Selecting user at random (queue length was " + str(len(bot.user_queue)) + ")"
+    print ("Selecting user at random (queue length was " + str(len(bot.user_queue)) + ")")
     return active_users[random.randrange(0, len(active_users))]
 
 
@@ -153,12 +155,12 @@ def selectExerciseAndStartTime(bot):
     exercise = selectExercise(bot)
 
     # Announcement String of next lottery time
-    lottery_announcement = "NEXT LOTTERY FOR " + exercise["name"].upper() + " IS IN " + str(minute_interval) + (" MINUTES" if minute_interval != 1 else " MINUTE")
+    lottery_announcement = "{\"text\":\"Proximo sorteio para " + exercise["name"].upper() + " sera em " + str("{:3.0f}".format(minute_interval)) + (" mins." if minute_interval != 1 else " min") + "\"}"
 
     # Announce the exercise to the thread
     if not bot.debug:
         requests.post(bot.post_URL, data=lottery_announcement)
-    print lottery_announcement
+    print (lottery_announcement)
 
     # Sleep the script until time is up
     if not bot.debug:
@@ -191,12 +193,13 @@ Selects a person to do the already-selected exercise
 def assignExercise(bot, exercise):
     # Select number of reps
     exercise_reps = random.randrange(exercise["minReps"], exercise["maxReps"]+1)
+    motivation_message = bot.motivation_messages[int(random.randrange(0, len(bot.motivation_messages)))]["text"]
 
-    winner_announcement = str(exercise_reps) + " " + str(exercise["units"]) + " " + exercise["name"] + " RIGHT NOW "
+    winner_announcement =  "{\"text\":\"" + exercise["name"].upper() + ": " + str(exercise_reps) + " " + str(exercise["units"]) + ". " + motivation_message + " "
 
     # EVERYBODY
     if random.random() < bot.group_callout_chance:
-        winner_announcement += "@channel!"
+        winner_announcement += "@channel !"
 
         for user_id in bot.user_cache:
             user = bot.user_cache[user_id]
@@ -210,7 +213,7 @@ def assignExercise(bot, exercise):
         for i in range(bot.num_people_per_callout):
             winner_announcement += str(winners[i].getUserHandle())
             if i == bot.num_people_per_callout - 2:
-                winner_announcement += ", and "
+                winner_announcement += " and "
             elif i == bot.num_people_per_callout - 1:
                 winner_announcement += "!"
             else:
@@ -219,10 +222,11 @@ def assignExercise(bot, exercise):
             winners[i].addExercise(exercise, exercise_reps)
             logExercise(bot,winners[i].getUserHandle(),exercise["name"],exercise_reps,exercise["units"])
 
+    winner_announcement +=  "\"}"
     # Announce the user
     if not bot.debug:
         requests.post(bot.post_URL, data=winner_announcement)
-    print winner_announcement
+    print (winner_announcement)
 
 
 def logExercise(bot,username,exercise,reps,units):
@@ -234,7 +238,7 @@ def logExercise(bot,username,exercise,reps,units):
 
 def saveUsers(bot):
     # Write to the command console today's breakdown
-    s = "```\n"
+    s = "{\"text\":\"```\n"
     #s += "Username\tAssigned\tComplete\tPercent
     s += "Username".ljust(15)
     for exercise in bot.exercises:
@@ -243,21 +247,25 @@ def saveUsers(bot):
 
     for user_id in bot.user_cache:
         user = bot.user_cache[user_id]
-        s += user.username.ljust(15)
+        sUser = (user.username[:13]+".."if len(user.username) > 15 else user.username ).ljust(15)
+        hasWins = False
         for exercise in bot.exercises:
             if exercise["id"] in user.exercises:
-                s += str(user.exercises[exercise["id"]]).ljust(len(exercise["name"]) + 2)
+                sUser += str(user.exercises[exercise["id"]]).ljust(len(exercise["name"]) + 2)
+                hasWins = True
             else:
-                s += str(0).ljust(len(exercise["name"]) + 2)
-        s += "\n"
+                sUser += str(0).ljust(len(exercise["name"]) + 2)
+        sUser += "\n"
+        s += sUser if hasWins else ""
 
         user.storeSession(str(datetime.datetime.now()))
 
-    s += "```"
+    s += "\n" + "{:%B %d, %Y - %H:%m}".format(datetime.datetime.now())
+    s += "```\"}"
 
     if not bot.debug:
         requests.post(bot.post_URL, data=s)
-    print s
+    print (s)
 
 
     # write to file
@@ -267,21 +275,24 @@ def saveUsers(bot):
 def isOfficeHours(bot):
     if not bot.office_hours_on:
         if bot.debug:
-            print "not office hours"
+            print ("not office hours")
         return True
     now = datetime.datetime.now()
     now_time = now.time()
     if now_time >= datetime.time(bot.office_hours_begin) and now_time <= datetime.time(bot.office_hours_end):
         if bot.debug:
-            print "in office hours"
+            print ("in office hours")
         return True
     else:
         if bot.debug:
-            print "out office hours"
+            print ("out office hours")
         return False
 
 def main():
     bot = Bot()
+    
+    if bot.debug:
+        print ("debugging...")
 
     try:
         while True:
